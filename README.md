@@ -14,3 +14,7 @@ Entities:
 ## Run Example
 
 Run example with python3 -m examples.example
+
+## Unit Tests
+
+./test.sh
