@@ -10,3 +10,7 @@ Entities:
 
 
 ![alt text](scheme.png)
+
+## Run Example
+
+Run example with python3 -m examples.example
