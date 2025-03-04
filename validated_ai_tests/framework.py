@@ -17,9 +17,12 @@ class Case:
     _COMMON_VALIDATOR_PROMPT = """
         You are given an input and a description that may describe this input.
         Your goal is to determine if the input matches the description.
+        Focus primarily on meaning and not on style. If slightly different language is
+        used, but meaning is the same - consider it a match.
+        If languages are different - the results are different, unless instruction specifies otherwise.
         
-        Always return a JSON. If yes, return {{"result": "PASS", "Explanation": "..."}}.
-        If no, return {{"result": "FAIL", "Explanation": "..."}}.
+        Always return a JSON. If yes, return {{"result": "PASS", "explanation": "..."}}.
+        If no, return {{"result": "FAIL", "explanation": "..."}}.
 
         Description: {description}
         Input: 
@@ -50,25 +53,28 @@ class Case:
 
         for p_case in self.pass_cases:
             resp = get_llm_json_response(client, self._full_prompt + p_case)
+            explanation = resp.get("explanation")
             result = resp.get("result")
             if result.upper() == "PASS":
-                validator_result["cases"].append({"case": p_case, "result": "PASS"})
+                validator_result["cases"].append({"case": p_case, "result": "PASS", "explanation": explanation})
             else:
-                validator_result["cases"].append({"case": p_case, "result": "FAIL"})
+                validator_result["cases"].append({"case": p_case, "result": "FAIL", "explanation": explanation})
                 has_failure = True
+        # TODO: Consolidate duplicat lines.
         for f_case in self.fail_cases:
             resp = get_llm_json_response(client, self._full_prompt + f_case)
+            explanation = resp.get("explanation")
             result = resp.get("result")
             if result.upper() == "FAIL":
-                validator_result["cases"].append({"case": f_case, "result": "PASS"})
+                validator_result["cases"].append({"case": f_case, "result": "PASS", "explanation": explanation})
             else:
-                validator_result["cases"].append({"case": f_case, "result": "FAIL"})
+                validator_result["cases"].append({"case": f_case, "result": "FAIL", "explanation": explanation})
                 has_failure = True
 
         validator_result["has_failure"] = has_failure
         return validator_result
 
-    async def run_case(self, client):
+    async def run_case(self, client) -> tuple[bool, str]:
         if callable(self.executor):
             value = self.executor(*self.input_args, **self.input_kwargs)
             if inspect.isawaitable(value):
@@ -81,10 +87,11 @@ class Case:
             )
         resp = get_llm_json_response(client, self._full_prompt + value)
         result = resp.get("result")
+        explanation = resp.get("explanation")
         if result.upper() == "PASS":
-            return True
+            return (True, explanation)
         else:
-            return False
+            return (False, explanation)
 
     @property
     def _full_prompt(self):
@@ -104,11 +111,12 @@ class ValidatedCasesRunner:
         results = []
         for case in self.cases:
             validator_results = await case.validate(self.client)
-            test_passes = await case.run_case(self.client)
+            test_passes, explanation = await case.run_case(self.client)
             results.append(
                 {
                     "validator_results": validator_results,
                     "test_passes": test_passes,
+                    "explanation": explanation,
                 }
             )
         return results

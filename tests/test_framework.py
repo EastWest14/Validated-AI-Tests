@@ -25,7 +25,7 @@ def sync_case():
 def pass_llm_response():
     mock_llm_response = MagicMock()
     dummy_choice = MagicMock()
-    dummy_choice.message.content = '{"result": "PASS", "Explanation": "..."}'
+    dummy_choice.message.content = '{"result": "PASS", "explanation": "..."}'
     mock_llm_response.choices = [dummy_choice]
     return mock_llm_response
 
@@ -39,7 +39,7 @@ def pass_responding_llm_client(pass_llm_response):
 
 @pytest.mark.asyncio
 async def test_case_run_sync(sync_case, pass_responding_llm_client):
-    result = await sync_case.run_case(pass_responding_llm_client)
+    result, explanation = await sync_case.run_case(pass_responding_llm_client)
     pass_responding_llm_client.chat.completions.create.assert_called_once_with(
         model="gpt-4o",
         messages=[
@@ -48,3 +48,4 @@ async def test_case_run_sync(sync_case, pass_responding_llm_client):
         response_format={"type": "json_object"},
     )
     assert result is True
+    assert explanation is not None
