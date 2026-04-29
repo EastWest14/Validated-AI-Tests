@@ -1,12 +1,16 @@
 import json
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 import inspect
 
+DEFAULT_LLM_MODEL = "gpt-5-chat-latest"
 
-def get_llm_json_response(client, prompt: str) -> str:
-    response = client.chat.completions.create(
-        model="gpt-4o",
+
+async def get_llm_json_response(
+    client, prompt: str, model: str = DEFAULT_LLM_MODEL
+) -> dict:
+    response = await client.chat.completions.create(
+        model=model,
         messages=[{"role": "system", "content": prompt}],
         response_format={"type": "json_object"},
     )
@@ -44,7 +48,7 @@ class Case:
         self.pass_cases = pass_cases
         self.fail_cases = fail_cases
 
-    async def validate(self, client):
+    async def validate(self, client, model: str = DEFAULT_LLM_MODEL):
         validator_result = {
             "cases": [],
             "has_failure": False,
@@ -52,7 +56,9 @@ class Case:
         has_failure = False
 
         for p_case in self.pass_cases:
-            resp = get_llm_json_response(client, self._full_prompt + p_case)
+            resp = await get_llm_json_response(
+                client, self._full_prompt + p_case, model
+            )
             explanation = resp.get("explanation")
             result = resp.get("result")
             if result.upper() == "PASS":
@@ -62,7 +68,9 @@ class Case:
                 has_failure = True
         # TODO: Consolidate duplicat lines.
         for f_case in self.fail_cases:
-            resp = get_llm_json_response(client, self._full_prompt + f_case)
+            resp = await get_llm_json_response(
+                client, self._full_prompt + f_case, model
+            )
             explanation = resp.get("explanation")
             result = resp.get("result")
             if result.upper() == "FAIL":
@@ -74,7 +82,9 @@ class Case:
         validator_result["has_failure"] = has_failure
         return validator_result
 
-    async def run_case(self, client) -> tuple[bool, str]:
+    async def run_case(
+        self, client, model: str = DEFAULT_LLM_MODEL
+    ) -> tuple[bool, str]:
         if callable(self.executor):
             value = self.executor(*self.input_args, **self.input_kwargs)
             if inspect.isawaitable(value):
@@ -85,7 +95,9 @@ class Case:
             raise TypeError(
                 "Expected a callable or an awaitable for the executor input."
             )
-        resp = get_llm_json_response(client, self._full_prompt + value)
+        resp = await get_llm_json_response(
+            client, self._full_prompt + value, model
+        )
         result = resp.get("result")
         explanation = resp.get("explanation")
         if result.upper() == "PASS":
@@ -101,17 +113,23 @@ class Case:
 
 
 class ValidatedCasesRunner:
-    def __init__(self, cases, client=None):
+    def __init__(
+        self,
+        cases,
+        client=None,
+        model: str = DEFAULT_LLM_MODEL,
+    ):
         self.cases = cases
+        self.model = model
         if not client:
-            client = OpenAI()
+            client = AsyncOpenAI()
         self.client = client
 
     async def run(self):
         results = []
         for case in self.cases:
-            validator_results = await case.validate(self.client)
-            test_passes, explanation = await case.run_case(self.client)
+            validator_results = await case.validate(self.client, self.model)
+            test_passes, explanation = await case.run_case(self.client, self.model)
             results.append(
                 {
                     "validator_results": validator_results,
