@@ -1,7 +1,7 @@
 import pytest
-from validated_ai_tests import Case
+from validated_ai_tests import DEFAULT_LLM_MODEL, Case
 
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 
 @pytest.fixture
@@ -33,15 +33,15 @@ def pass_llm_response():
 @pytest.fixture
 def pass_responding_llm_client(pass_llm_response):
     client = MagicMock()
-    client.chat.completions.create.return_value = pass_llm_response
+    client.chat.completions.create = AsyncMock(return_value=pass_llm_response)
     return client
 
 
 @pytest.mark.asyncio
 async def test_case_run_sync(sync_case, pass_responding_llm_client):
     result, explanation = await sync_case.run_case(pass_responding_llm_client)
-    pass_responding_llm_client.chat.completions.create.assert_called_once_with(
-        model="gpt-4o",
+    pass_responding_llm_client.chat.completions.create.assert_awaited_once_with(
+        model=DEFAULT_LLM_MODEL,
         messages=[
             {"role": "system", "content": sync_case._full_prompt + "Affirmative"}
         ],
